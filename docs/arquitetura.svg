@@ -71,7 +71,7 @@
   <text x="917" y="594" text-anchor="middle" class="tec" fill="#1d4ed8">Python 3.12 · gRPC :9090</text>
   <text x="917" y="618" text-anchor="middle" class="item">ProcessarTransacao</text>
   <text x="917" y="638" text-anchor="middle" class="item">RealizarDeposito</text>
-  <text x="917" y="658" text-anchor="middle" class="item">ListarTransacoes</text>
+  <text x="917" y="658" text-anchor="middle" class="item">Listar/ConsultarTransacao</text>
   <text x="917" y="678" text-anchor="middle" class="item">status PENDENTE → final</text>
   <text x="917" y="698" text-anchor="middle" class="item">psycopg 3 + pool</text>
 

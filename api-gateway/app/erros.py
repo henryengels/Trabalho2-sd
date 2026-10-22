@@ -20,6 +20,9 @@ GRPC_PARA_HTTP = {
     grpc.StatusCode.PERMISSION_DENIED: 403,
     grpc.StatusCode.NOT_FOUND: 404,
     grpc.StatusCode.ALREADY_EXISTS: 409,
+    # Operação desfeita por concorrência (conta bloqueada por outra operação além do
+    # lock_timeout): nada foi gravado e pode ser repetida.
+    grpc.StatusCode.ABORTED: 409,
     grpc.StatusCode.UNAVAILABLE: 503,
     grpc.StatusCode.DEADLINE_EXCEEDED: 503,
 }

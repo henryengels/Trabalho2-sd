@@ -11,6 +11,7 @@ import aula.sd.fintech.grpc.DepositarRequest;
 import aula.sd.fintech.grpc.DepositarResponse;
 import aula.sd.fintech.grpc.TransferirRequest;
 import aula.sd.fintech.grpc.TransferirResponse;
+import io.grpc.Context;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 import org.mindrot.jbcrypt.BCrypt;
@@ -146,7 +147,11 @@ public class ContaServiceImpl extends ContaServiceGrpc.ContaServiceImplBase {
         try {
             // A validação e o débito/crédito acontecem dentro de uma transação do banco,
             // com as linhas das duas contas bloqueadas (ver ContaRepositorio.transferir).
-            ContaRepositorio.Movimentacao resultado = repositorio.transferir(origem, destino, valor);
+            // Context.current() é esta chamada gRPC: fica cancelado quando o prazo enviado
+            // pelo pagamento-service se esgota ou quando ele desiste da chamada.
+            Context chamada = Context.current();
+            ContaRepositorio.Movimentacao resultado =
+                    repositorio.transferir(origem, destino, valor, chamada::isCancelled);
 
             TransferirResponse resposta = TransferirResponse.newBuilder()
                                                             .setAprovada(resultado.aprovada())
@@ -160,6 +165,8 @@ public class ContaServiceImpl extends ContaServiceGrpc.ContaServiceImplBase {
 
             responseObserver.onNext(resposta);
             responseObserver.onCompleted();
+        } catch (ContaRepositorio.ChamadaCanceladaException e) {
+            responderCancelada(responseObserver, "Transferência desfeita");
         } catch (SQLException e) {
             responderErroBanco(responseObserver, e);
         }
@@ -173,7 +180,8 @@ public class ContaServiceImpl extends ContaServiceGrpc.ContaServiceImplBase {
         System.out.printf("Depósito recebido: conta=%s, valor=%s%n", conta, formatarReais(valor));
 
         try {
-            ContaRepositorio.Movimentacao resultado = repositorio.depositar(conta, valor);
+            Context chamada = Context.current();
+            ContaRepositorio.Movimentacao resultado = repositorio.depositar(conta, valor, chamada::isCancelled);
 
             DepositarResponse resposta = DepositarResponse.newBuilder()
                                                           .setAprovada(resultado.aprovada())
@@ -187,9 +195,18 @@ public class ContaServiceImpl extends ContaServiceGrpc.ContaServiceImplBase {
 
             responseObserver.onNext(resposta);
             responseObserver.onCompleted();
+        } catch (ContaRepositorio.ChamadaCanceladaException e) {
+            responderCancelada(responseObserver, "Depósito desfeito");
         } catch (SQLException e) {
             responderErroBanco(responseObserver, e);
         }
+    }
+
+    // O chamador já desistiu; a resposta provavelmente não chegará, mas a chamada é encerrada
+    // com o código correto e o log registra que nada foi gravado.
+    private static void responderCancelada(StreamObserver<?> responseObserver, String operacaoDesfeita) {
+        System.out.printf("%s: o prazo do chamador acabou antes do commit.%n", operacaoDesfeita);
+        responderErro(responseObserver, Status.DEADLINE_EXCEEDED, operacaoDesfeita + ": prazo da chamada esgotado.");
     }
 
     // Erros de negócio viram status gRPC padronizados; o gateway converte cada um no
@@ -200,6 +217,14 @@ public class ContaServiceImpl extends ContaServiceGrpc.ContaServiceImplBase {
 
     // O detalhe do erro SQL fica só no log do servidor; o chamador recebe uma mensagem genérica.
     private static void responderErroBanco(StreamObserver<?> responseObserver, SQLException e) {
+        // 55P03 = lock_timeout (outra transação segurou a conta por mais de 2 s);
+        // 57014 = statement_timeout (comando passou de 5 s). Nos dois casos houve rollback,
+        // nada foi gravado e a operação pode ser repetida: ABORTED vira 409 no gateway.
+        if ("55P03".equals(e.getSQLState()) || "57014".equals(e.getSQLState())) {
+            System.err.printf("Operação abortada por tempo no banco: %s%n", e.getMessage());
+            responderErro(responseObserver, Status.ABORTED, "Conta ocupada por outra operação; tente novamente.");
+            return;
+        }
         System.err.printf("Erro no banco de dados: %s%n", e.getMessage());
         responderErro(responseObserver, Status.INTERNAL, "Erro ao acessar o banco de dados.");
     }

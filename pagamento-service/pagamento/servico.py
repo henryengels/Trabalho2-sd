@@ -1,10 +1,12 @@
 """Implementação do PagamentoService definido em proto/pagamento.proto."""
 
 import functools
+import uuid
 
 import grpc
 import psycopg
 from google.protobuf.timestamp_pb2 import Timestamp
+from psycopg import errors
 
 import pagamento_pb2
 import pagamento_pb2_grpc
@@ -17,7 +19,7 @@ LIMITE_MAXIMO = 100
 
 
 def _tratar_erro_banco(metodo):
-    """Converte falhas do PostgreSQL em status gRPC INTERNAL.
+    """Converte falhas do PostgreSQL em status gRPC.
 
     O detalhe do erro fica só no log do servidor; o chamador recebe uma mensagem genérica.
     """
@@ -26,6 +28,10 @@ def _tratar_erro_banco(metodo):
     def envolvido(self, request, context):
         try:
             return metodo(self, request, context)
+        except (errors.LockNotAvailable, errors.QueryCanceled) as erro:
+            # lock_timeout ou statement_timeout: o banco desfez o comando e nada foi gravado.
+            print(f"Operação abortada por tempo no banco: {erro}")
+            context.abort(grpc.StatusCode.ABORTED, "Banco de pagamentos ocupado; tente novamente.")
         except psycopg.Error as erro:
             print(f"Erro no banco de dados: {erro}")
             context.abort(grpc.StatusCode.INTERNAL, "Erro ao acessar o banco de dados.")
@@ -103,6 +109,23 @@ class PagamentoServiceImpl(pagamento_pb2_grpc.PagamentoServiceServicer):
         transacoes = self._repositorio.listar(request.conta, limite)
         print(f"Extrato consultado: conta={request.conta}, itens={len(transacoes)}")
         return pagamento_pb2.ListarTransacoesResponse(transacoes=[_para_mensagem(t) for t in transacoes])
+
+    @_tratar_erro_banco
+    def ConsultarTransacao(self, request, context):
+        if not request.conta:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "Conta é obrigatória.")
+        try:
+            transacao_id = uuid.UUID(request.id)
+        except ValueError:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "Identificador de transação inválido.")
+
+        transacao = self._repositorio.buscar(transacao_id, request.conta)
+        if transacao is None:
+            # A mesma resposta para id inexistente e para transação de outra conta: não revela
+            # a terceiros que o identificador existe.
+            context.abort(grpc.StatusCode.NOT_FOUND, "Transação não encontrada.")
+        print(f"Transação consultada: id={transacao_id}, conta={request.conta}")
+        return _para_mensagem(transacao)
 
     def _registrar_falha(self, transacao_id, erro: grpc.RpcError, context) -> None:
         """Marca a transação como FALHA e repassa ao chamador o status gRPC recebido.

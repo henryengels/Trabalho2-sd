@@ -8,6 +8,7 @@ import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.BooleanSupplier;
 
 // Acesso à tabela conta.contas por JDBC. Toda leitura e alteração de saldo do
 // sistema passa por esta classe.
@@ -21,6 +22,14 @@ public class ContaRepositorio {
     public record Movimentacao(String motivoRecusa, long saldoCentavos) {
         public boolean aprovada() {
             return motivoRecusa == null;
+        }
+    }
+
+    // Lançada quando quem chamou já desistiu (prazo gRPC esgotado) antes do commit;
+    // a movimentação é desfeita.
+    public static class ChamadaCanceladaException extends RuntimeException {
+        public ChamadaCanceladaException() {
+            super("O prazo do chamador acabou antes do commit.");
         }
     }
 
@@ -64,8 +73,10 @@ public class ContaRepositorio {
     }
 
     // Débito e crédito acontecem na mesma transação do banco: ou os dois são
-    // gravados (commit) ou nenhum (rollback).
-    public Movimentacao transferir(String origem, String destino, long valor) throws SQLException {
+    // gravados (commit) ou nenhum (rollback). chamadaCancelada informa se quem chamou
+    // já desistiu; nesse caso a transferência é desfeita em vez de confirmada.
+    public Movimentacao transferir(String origem, String destino, long valor,
+                                   BooleanSupplier chamadaCancelada) throws SQLException {
         try (Connection conexao = banco.getConnection()) {
             conexao.setAutoCommit(false);
             try {
@@ -98,27 +109,47 @@ public class ContaRepositorio {
 
                 long saldoOrigem = somarAoSaldo(conexao, origem, -valor);
                 somarAoSaldo(conexao, destino, valor);
-                conexao.commit();
+                confirmar(conexao, chamadaCancelada);
                 return new Movimentacao(null, saldoOrigem);
-            } catch (SQLException e) {
+            } catch (SQLException | RuntimeException e) {
                 conexao.rollback();
                 throw e;
             }
         }
     }
 
-    // Um único UPDATE já é atômico; RETURNING devolve o saldo resultante.
-    public Movimentacao depositar(String conta, long valor) throws SQLException {
+    // Crédito numa transação, para também poder ser desfeito se quem chamou desistir.
+    // RETURNING devolve o saldo resultante.
+    public Movimentacao depositar(String conta, long valor, BooleanSupplier chamadaCancelada) throws SQLException {
         if (valor <= 0) {
             return new Movimentacao("Valor deve ser maior que zero.", 0L);
         }
         try (Connection conexao = banco.getConnection()) {
-            Long saldo = somarAoSaldoSeExistir(conexao, conta, valor);
-            if (saldo == null) {
-                return new Movimentacao("Conta não encontrada.", 0L);
+            conexao.setAutoCommit(false);
+            try {
+                Long saldo = somarAoSaldoSeExistir(conexao, conta, valor);
+                if (saldo == null) {
+                    conexao.rollback();
+                    return new Movimentacao("Conta não encontrada.", 0L);
+                }
+                confirmar(conexao, chamadaCancelada);
+                return new Movimentacao(null, saldo);
+            } catch (SQLException | RuntimeException e) {
+                conexao.rollback();
+                throw e;
             }
-            return new Movimentacao(null, saldo);
         }
+    }
+
+    // Último ponto antes de gravar. Se o prazo do chamador (pagamento-service) já acabou,
+    // ele registrou a transação como FALHA; confirmar agora movimentaria dinheiro que o
+    // histórico diz não ter sido movimentado. Por isso a operação é desfeita.
+    // Ainda resta uma janela pequena: o commit terminar e a resposta se perder na rede.
+    private static void confirmar(Connection conexao, BooleanSupplier chamadaCancelada) throws SQLException {
+        if (chamadaCancelada.getAsBoolean()) {
+            throw new ChamadaCanceladaException();
+        }
+        conexao.commit();
     }
 
     // Mesmas regras do Trabalho 1, agora aplicadas aos saldos lidos do banco.

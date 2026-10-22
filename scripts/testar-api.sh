@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Exercita a API pelo nginx (HTTPS), do mesmo jeito que o frontend faz, e confere
 # o status HTTP de cada resposta: 401 sem token, 400 para dados inválidos,
-# 201/200 em caso de sucesso, 409 para conta duplicada e 422 para transação recusada.
+# 201/200 em caso de sucesso, 404 para transação inexistente, 409 para conta
+# duplicada e 422 para transação recusada. Confere também o cabeçalho Location.
 #
 # Uso:  bash scripts/testar-api.sh                     (padrão: https://localhost)
 #       bash scripts/testar-api.sh https://34.123.45.67
@@ -16,14 +17,16 @@ ORIGEM="ana_$SUFIXO"
 DESTINO="bruno_$SUFIXO"
 SENHA="senha-forte-123"
 CORPO="$(mktemp)"
-trap 'rm -f "$CORPO"' EXIT
+CABECALHOS="$(mktemp)"
+trap 'rm -f "$CORPO" "$CABECALHOS"' EXIT
 
 TOTAL=0
 FALHAS=0
 
-# requisicao MÉTODO CAMINHO [JSON] [TOKEN] → imprime o status HTTP; o corpo fica em $CORPO.
+# requisicao MÉTODO CAMINHO [JSON] [TOKEN] → imprime o status HTTP; o corpo fica em
+# $CORPO e os cabeçalhos da resposta em $CABECALHOS.
 requisicao() {
-    local args=(-sk -o "$CORPO" -w "%{http_code}" -X "$1" "$BASE$2" -H "Accept: application/json")
+    local args=(-sk -o "$CORPO" -D "$CABECALHOS" -w "%{http_code}" -X "$1" "$BASE$2" -H "Accept: application/json")
     [ -n "${3:-}" ] && args+=(-H "Content-Type: application/json" --data "$3")
     [ -n "${4:-}" ] && args+=(-H "Authorization: Bearer $4")
     curl "${args[@]}"
@@ -81,6 +84,9 @@ verificar "transferência tentando informar a conta de origem" 400 \
     "$(requisicao POST /api/transacoes/transferencia "{\"conta_origem\":\"$DESTINO\",\"conta_destino\":\"$ORIGEM\",\"valor\":10}" "$TOKEN")"
 verificar "transferência de R$ 150,50 para $DESTINO" 201 \
     "$(requisicao POST /api/transacoes/transferencia "{\"conta_destino\":\"$DESTINO\",\"valor\":150.50}" "$TOKEN")"
+TRANSACAO="$(sed -n 's/.*"transacao_id":"\([^"]*\)".*/\1/p' "$CORPO")"
+LOCATION="$(sed -n 's/^[Ll]ocation: *\([^[:space:]]*\).*/\1/p' "$CABECALHOS")"
+verificar "cabeçalho Location do 201 aponta para o comprovante" "/api/transacoes/$TRANSACAO" "$LOCATION"
 verificar "transferência acima do saldo (recusada)" 422 \
     "$(requisicao POST /api/transacoes/transferencia "{\"conta_destino\":\"$DESTINO\",\"valor\":100000}" "$TOKEN")"
 verificar "transferência para conta inexistente (recusada)" 422 \
@@ -92,6 +98,10 @@ verificar "saldo de $ORIGEM (esperado R\$ 849,50 = 84950 centavos)" 200 "$(requi
 verificar "extrato de $ORIGEM (saldo do Java + transações do Python)" 200 \
     "$(requisicao GET '/api/contas/me/extrato?limite=5' '' "$TOKEN")"
 verificar "extrato com limite inválido" 400 "$(requisicao GET '/api/contas/me/extrato?limite=0' '' "$TOKEN")"
+verificar "comprovante da transferência (endereço do Location)" 200 "$(requisicao GET "$LOCATION" '' "$TOKEN")"
+verificar "comprovante de transação inexistente" 404 \
+    "$(requisicao GET /api/transacoes/00000000-0000-4000-8000-000000000000 '' "$TOKEN")"
+verificar "comprovante com identificador inválido" 400 "$(requisicao GET /api/transacoes/abc '' "$TOKEN")"
 
 echo
 echo "$TOTAL verificações, $FALHAS falha(s)."

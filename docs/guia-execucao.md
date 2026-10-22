@@ -106,7 +106,8 @@ Base da API: `https://localhost/api`. As rotas protegidas exigem o cabeçalho
 ### Postman
 
 O arquivo [postman/Fintech-SD.postman_collection.json](postman/Fintech-SD.postman_collection.json) traz
-todas as rotas, na ordem, com os casos de sucesso e de erro (201, 200, 400, 401, 409, 422).
+todas as rotas, na ordem, com os casos de sucesso e de erro (201, 200, 400, 401, 404, 409, 422), além do
+comprovante da transferência pelo endereço do cabeçalho `Location`.
 
 1. No Postman: **Import** → selecione o arquivo da coleção.
 2. Desative a verificação do certificado autoassinado: **Settings → General → SSL certificate
@@ -132,7 +133,7 @@ O CORS não afeta Postman nem Insomnia: ele só vale para páginas abertas no na
 bash scripts/testar-api.sh https://localhost
 ```
 
-No Windows, rode pelo **Git Bash**. O script termina com `22 verificações, 0 falha(s).`
+No Windows, rode pelo **Git Bash**. O script termina com `26 verificações, 0 falha(s).`
 
 Se os testes forem executados várias vezes seguidas, pode aparecer `429 Too Many Requests`: é o rate
 limit do nginx nas rotas de login e cadastro (30 por minuto). Aguarde um minuto e rode de novo.

@@ -6,26 +6,60 @@
   },
   "auth": {
     "type": "bearer",
-    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
   },
   "variable": [
-    { "key": "base_url", "value": "https://localhost" },
-    { "key": "senha", "value": "senha-forte-123" },
-    { "key": "conta", "value": "" },
-    { "key": "destino", "value": "" },
-    { "key": "token", "value": "" }
+    {
+      "key": "base_url",
+      "value": "https://localhost"
+    },
+    {
+      "key": "senha",
+      "value": "senha-forte-123"
+    },
+    {
+      "key": "conta",
+      "value": ""
+    },
+    {
+      "key": "destino",
+      "value": ""
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "transacao_id",
+      "value": ""
+    }
   ],
   "item": [
     {
       "name": "0. Saúde (pública) - 200",
       "request": {
-        "auth": { "type": "noauth" },
+        "auth": {
+          "type": "noauth"
+        },
         "method": "GET",
         "url": "{{base_url}}/api/saude"
       },
-      "event": [{ "listen": "test", "script": { "exec": [
-        "pm.test('200 OK', () => pm.response.to.have.status(200));"
-      ] } }]
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
     },
     {
       "name": "1. Autenticação",
@@ -33,94 +67,202 @@
         {
           "name": "Registrar conta de destino - 201",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"titular\": \"Bruno Lima\",\n  \"conta\": \"{{destino}}\",\n  \"senha\": \"{{senha}}\"\n}" },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titular\": \"Bruno Lima\",\n  \"conta\": \"{{destino}}\",\n  \"senha\": \"{{senha}}\"\n}"
+            },
             "url": "{{base_url}}/api/auth/registro"
           },
           "event": [
-            { "listen": "prerequest", "script": { "exec": [
-              "// Conta nova a cada execução, para não esbarrar em 409.",
-              "pm.collectionVariables.set('destino', 'bruno_' + Date.now());"
-            ] } },
-            { "listen": "test", "script": { "exec": [
-              "pm.test('201 Created', () => pm.response.to.have.status(201));"
-            ] } }
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Conta nova a cada execução, para não esbarrar em 409.",
+                  "pm.collectionVariables.set('destino', 'bruno_' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
           ]
         },
         {
           "name": "Registrar minha conta - 201",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"titular\": \"Ana Souza\",\n  \"conta\": \"{{conta}}\",\n  \"senha\": \"{{senha}}\"\n}" },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titular\": \"Ana Souza\",\n  \"conta\": \"{{conta}}\",\n  \"senha\": \"{{senha}}\"\n}"
+            },
             "url": "{{base_url}}/api/auth/registro"
           },
           "event": [
-            { "listen": "prerequest", "script": { "exec": [
-              "pm.collectionVariables.set('conta', 'ana_' + Date.now());"
-            ] } },
-            { "listen": "test", "script": { "exec": [
-              "pm.test('201 Created', () => pm.response.to.have.status(201));"
-            ] } }
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "pm.collectionVariables.set('conta', 'ana_' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
           ]
         },
         {
           "name": "Registrar conta duplicada - 409",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"titular\": \"Ana Souza\",\n  \"conta\": \"{{conta}}\",\n  \"senha\": \"{{senha}}\"\n}" },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titular\": \"Ana Souza\",\n  \"conta\": \"{{conta}}\",\n  \"senha\": \"{{senha}}\"\n}"
+            },
             "url": "{{base_url}}/api/auth/registro"
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "pm.test('409 Conflict', () => pm.response.to.have.status(409));"
-          ] } }]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('409 Conflict', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Registrar com dados inválidos - 400",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"titular\": \"Ana\",\n  \"conta\": \"Ana!\",\n  \"senha\": \"123\"\n}" },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titular\": \"Ana\",\n  \"conta\": \"Ana!\",\n  \"senha\": \"123\"\n}"
+            },
             "url": "{{base_url}}/api/auth/registro"
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
-            "pm.test('lista os campos inválidos', () => pm.expect(pm.response.json().erros).to.have.length.above(0));"
-          ] } }]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('lista os campos inválidos', () => pm.expect(pm.response.json().erros).to.have.length.above(0));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Login com senha errada - 401",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"conta\": \"{{conta}}\",\n  \"senha\": \"senha-errada\"\n}" },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conta\": \"{{conta}}\",\n  \"senha\": \"senha-errada\"\n}"
+            },
             "url": "{{base_url}}/api/auth/login"
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));"
-          ] } }]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Login - 200 (guarda o token)",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"conta\": \"{{conta}}\",\n  \"senha\": \"{{senha}}\"\n}" },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conta\": \"{{conta}}\",\n  \"senha\": \"{{senha}}\"\n}"
+            },
             "url": "{{base_url}}/api/auth/login"
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "pm.test('200 OK', () => pm.response.to.have.status(200));",
-            "// Guarda o JWT; as próximas requisições o enviam em Authorization: Bearer.",
-            "pm.collectionVariables.set('token', pm.response.json().access_token);"
-          ] } }]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "// Guarda o JWT; as próximas requisições o enviam em Authorization: Bearer.",
+                  "pm.collectionVariables.set('token', pm.response.json().access_token);"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -130,27 +272,56 @@
         {
           "name": "Saldo sem token - 401",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "GET",
             "url": "{{base_url}}/api/contas/me"
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));"
-          ] } }]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Saldo - 200",
-          "request": { "method": "GET", "url": "{{base_url}}/api/contas/me" },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "pm.test('200 OK', () => pm.response.to.have.status(200));"
-          ] } }]
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/contas/me"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Extrato - 200",
-          "request": { "method": "GET", "url": "{{base_url}}/api/contas/me/extrato?limite=10" },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "pm.test('200 OK', () => pm.response.to.have.status(200));"
-          ] } }]
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/contas/me/extrato?limite=10"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -161,62 +332,175 @@
           "name": "Depósito de R$ 1.000,00 - 201",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"valor\": 1000.00\n}" },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"valor\": 1000.00\n}"
+            },
             "url": "{{base_url}}/api/transacoes/deposito"
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "pm.test('201 Created', () => pm.response.to.have.status(201));"
-          ] } }]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Depósito com 3 casas decimais - 400",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"valor\": 10.555\n}" },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"valor\": 10.555\n}"
+            },
             "url": "{{base_url}}/api/transacoes/deposito"
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
-          ] } }]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Transferência de R$ 150,50 - 201",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"conta_destino\": \"{{destino}}\",\n  \"valor\": 150.50\n}" },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conta_destino\": \"{{destino}}\",\n  \"valor\": 150.50\n}"
+            },
             "url": "{{base_url}}/api/transacoes/transferencia"
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "pm.test('201 Created', () => pm.response.to.have.status(201));",
-            "pm.test('saldo de R$ 849,50', () => pm.expect(pm.response.json().saldo_centavos).to.eql(84950));"
-          ] } }]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "pm.test('saldo de R$ 849,50', () => pm.expect(pm.response.json().saldo_centavos).to.eql(84950));",
+                  "const id = pm.response.json().transacao_id;",
+                  "pm.collectionVariables.set('transacao_id', id);",
+                  "pm.test('Location aponta para o comprovante', () => pm.response.to.have.header('Location', '/api/transacoes/' + id));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Comprovante da transferência - 200",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/transacoes/{{transacao_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('é a transferência criada', () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('transacao_id')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Comprovante inexistente - 404",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/transacoes/00000000-0000-4000-8000-000000000000"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Transferência acima do saldo - 422",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"conta_destino\": \"{{destino}}\",\n  \"valor\": 100000\n}" },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conta_destino\": \"{{destino}}\",\n  \"valor\": 100000\n}"
+            },
             "url": "{{base_url}}/api/transacoes/transferencia"
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "pm.test('422 (saldo insuficiente)', () => pm.response.to.have.status(422));"
-          ] } }]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('422 (saldo insuficiente)', () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Transferência informando conta_origem - 400",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"conta_origem\": \"{{destino}}\",\n  \"conta_destino\": \"{{conta}}\",\n  \"valor\": 10\n}" },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conta_origem\": \"{{destino}}\",\n  \"conta_destino\": \"{{conta}}\",\n  \"valor\": 10\n}"
+            },
             "url": "{{base_url}}/api/transacoes/transferencia"
           },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
-          ] } }]
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
         }
       ]
     }

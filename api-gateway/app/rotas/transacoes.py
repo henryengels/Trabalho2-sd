@@ -1,12 +1,14 @@
-"""Depósito e transferência da conta autenticada."""
+"""Depósito, transferência e comprovante de transação da conta autenticada."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.responses import JSONResponse
 
 import pagamento_pb2
 
 from ..clientes_grpc import ClientesGrpc, obter_clientes
-from ..esquemas import DepositoEntrada, ErroSaida, ResultadoTransacaoSaida, TransferenciaEntrada
+from ..esquemas import DepositoEntrada, ErroSaida, ResultadoTransacaoSaida, TransacaoSaida, TransferenciaEntrada
 from ..seguranca import Usuario, usuario_atual
 
 router = APIRouter(prefix="/api/transacoes", tags=["Transações"])
@@ -14,12 +16,13 @@ router = APIRouter(prefix="/api/transacoes", tags=["Transações"])
 RESPOSTAS_ERRO = {
     400: {"model": ErroSaida},
     401: {"model": ErroSaida},
+    409: {"model": ErroSaida, "description": "Conta ocupada por outra operação; nada foi gravado"},
     422: {"model": ErroSaida, "description": "Transação recusada pela regra de negócio (ex.: saldo insuficiente)"},
     503: {"model": ErroSaida, "description": "Microsserviço indisponível"},
 }
 
 
-def _responder(resposta: pagamento_pb2.ProcessarTransacaoResponse):
+def _responder(resposta: pagamento_pb2.ProcessarTransacaoResponse, response: Response):
     resultado = ResultadoTransacaoSaida(
         transacao_id=resposta.transacao_id,
         status=resposta.status,
@@ -33,6 +36,8 @@ def _responder(resposta: pagamento_pb2.ProcessarTransacaoResponse):
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content={"detail": resposta.mensagem, **resultado.model_dump()},
         )
+    # 201 Created informa em Location onde consultar o recurso criado (o comprovante).
+    response.headers["Location"] = f"{router.prefix}/{resposta.transacao_id}"
     return resultado
 
 
@@ -45,6 +50,7 @@ def _responder(resposta: pagamento_pb2.ProcessarTransacaoResponse):
 )
 async def depositar(
     dados: DepositoEntrada,
+    response: Response,
     usuario: Usuario = Depends(usuario_atual),
     clientes: ClientesGrpc = Depends(obter_clientes),
 ):
@@ -52,7 +58,7 @@ async def depositar(
         pagamento_pb2.RealizarDepositoRequest(conta=usuario.conta, valor_centavos=dados.valor_centavos()),
         timeout=clientes.timeout,
     )
-    return _responder(resposta)
+    return _responder(resposta, response)
 
 
 @router.post(
@@ -64,6 +70,7 @@ async def depositar(
 )
 async def transferir(
     dados: TransferenciaEntrada,
+    response: Response,
     usuario: Usuario = Depends(usuario_atual),
     clientes: ClientesGrpc = Depends(obter_clientes),
 ):
@@ -80,4 +87,24 @@ async def transferir(
         ),
         timeout=clientes.timeout,
     )
-    return _responder(resposta)
+    return _responder(resposta, response)
+
+
+@router.get(
+    "/{transacao_id}",
+    response_model=TransacaoSaida,
+    responses={400: {"model": ErroSaida}, 401: {"model": ErroSaida}, 404: {"model": ErroSaida}},
+    summary="Comprovante de uma transação da conta autenticada",
+)
+async def consultar(
+    transacao_id: UUID,
+    usuario: Usuario = Depends(usuario_atual),
+    clientes: ClientesGrpc = Depends(obter_clientes),
+):
+    # Só devolve transações em que a conta do token é origem ou destino; as demais
+    # (inclusive as que não existem) respondem 404.
+    transacao = await clientes.pagamentos.ConsultarTransacao(
+        pagamento_pb2.ConsultarTransacaoRequest(id=str(transacao_id), conta=usuario.conta),
+        timeout=clientes.timeout,
+    )
+    return TransacaoSaida.de_protobuf(transacao)

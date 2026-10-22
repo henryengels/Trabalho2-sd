@@ -12,6 +12,9 @@ from pathlib import Path
 from psycopg_pool import ConnectionPool
 
 _SCHEMA = Path(__file__).resolve().parent / "schema.sql"
+# Lista fixa de colunas, escrita no código (nunca vem do usuário); os valores das
+# consultas continuam sempre em parâmetros %s.
+_COLUNAS = "id, tipo, conta_origem, conta_destino, valor_centavos, status, mensagem, criada_em"
 
 
 @dataclass(frozen=True)
@@ -67,8 +70,8 @@ class TransacaoRepositorio:
     def listar(self, conta: str, limite: int) -> list[TransacaoRegistrada]:
         with self._pool.connection() as conexao:
             linhas = conexao.execute(
-                """
-                SELECT id, tipo, conta_origem, conta_destino, valor_centavos, status, mensagem, criada_em
+                f"""
+                SELECT {_COLUNAS}
                 FROM pagamento.transacoes
                 WHERE conta_origem = %s OR conta_destino = %s
                 ORDER BY criada_em DESC
@@ -77,3 +80,16 @@ class TransacaoRepositorio:
                 (conta, conta, limite),
             ).fetchall()
         return [TransacaoRegistrada(*linha) for linha in linhas]
+
+    def buscar(self, transacao_id: uuid.UUID, conta: str) -> TransacaoRegistrada | None:
+        """Devolve a transação só se a conta for origem ou destino dela."""
+        with self._pool.connection() as conexao:
+            linha = conexao.execute(
+                f"""
+                SELECT {_COLUNAS}
+                FROM pagamento.transacoes
+                WHERE id = %s AND (conta_origem = %s OR conta_destino = %s)
+                """,
+                (transacao_id, conta, conta),
+            ).fetchone()
+        return TransacaoRegistrada(*linha) if linha else None

@@ -62,6 +62,8 @@ app.add_middleware(
     allow_origins=config.lista_cors,
     allow_methods=["GET", "POST"],
     allow_headers=["Authorization", "Content-Type"],
+    # Permite que o JavaScript de outra origem autorizada leia o endereço do recurso criado.
+    expose_headers=["Location"],
     allow_credentials=False,
     max_age=600,
 )

@@ -27,6 +27,11 @@ service PagamentoService {
   // da mais recente para a mais antiga.
   rpc ListarTransacoes(ListarTransacoesRequest)
       returns (ListarTransacoesResponse);
+
+  // Devolve uma transação da qual a conta participa (origem ou destino).
+  // Falha com NOT_FOUND se ela não existir ou for de outra conta.
+  rpc ConsultarTransacao(ConsultarTransacaoRequest)
+      returns (Transacao);
 }
 
 // Mensagem enviada ao chamar ProcessarTransacao.
@@ -73,4 +78,11 @@ message Transacao {
 
 message ListarTransacoesResponse {
   repeated Transacao transacoes = 1;
+}
+
+message ConsultarTransacaoRequest {
+  // UUID da transação.
+  string id = 1;
+  // Conta autenticada; só vê transações em que é origem ou destino.
+  string conta = 2;
 }

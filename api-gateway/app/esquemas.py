@@ -5,7 +5,7 @@ ausente, tipo errado, formato inválido ou campo desconhecido resultam em
 400 Bad Request (ver erros.py) e não chegam aos microsserviços.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Annotated
 
@@ -92,6 +92,21 @@ class TransacaoSaida(BaseModel):
     status: str
     mensagem: str
     criada_em: datetime
+
+    @classmethod
+    def de_protobuf(cls, t) -> "TransacaoSaida":
+        """Converte a mensagem Protobuf Transacao (pagamento.proto) no JSON da API."""
+        return cls(
+            id=t.id,
+            tipo=t.tipo,
+            conta_origem=t.conta_origem or None,
+            conta_destino=t.conta_destino,
+            valor_centavos=t.valor_centavos,
+            status=t.status,
+            mensagem=t.mensagem,
+            # google.protobuf.Timestamp → datetime com fuso UTC.
+            criada_em=t.criada_em.ToDatetime(tzinfo=timezone.utc),
+        )
 
 
 class ExtratoSaida(BaseModel):

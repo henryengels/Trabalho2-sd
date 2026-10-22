@@ -1,7 +1,6 @@
 """Consulta de saldo e extrato da conta autenticada."""
 
 import asyncio
-from datetime import timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -61,18 +60,5 @@ async def extrato(
             timeout=clientes.timeout,
         ),
     )
-    transacoes = [
-        TransacaoSaida(
-            id=t.id,
-            tipo=t.tipo,
-            conta_origem=t.conta_origem or None,
-            conta_destino=t.conta_destino,
-            valor_centavos=t.valor_centavos,
-            status=t.status,
-            mensagem=t.mensagem,
-            # google.protobuf.Timestamp → datetime com fuso UTC.
-            criada_em=t.criada_em.ToDatetime(tzinfo=timezone.utc),
-        )
-        for t in lista.transacoes
-    ]
+    transacoes = [TransacaoSaida.de_protobuf(t) for t in lista.transacoes]
     return ExtratoSaida(conta=_conta_saida(saldo), transacoes=transacoes)

@@ -69,8 +69,12 @@ Documentação interativa (Swagger): `https://<host>/api/docs`.
 | POST   | `/api/auth/login`                | não   | `ContaService.Autenticar`, depois o gateway emite o JWT         | 200     | 400, 401            |
 | GET    | `/api/contas/me`                 | sim   | `ContaService.ConsultarSaldo`                                   | 200     | 401                 |
 | GET    | `/api/contas/me/extrato?limite=` | sim   | `ConsultarSaldo` (Java) e `ListarTransacoes` (Python) em paralelo | 200     | 400, 401            |
-| POST   | `/api/transacoes/deposito`       | sim   | `PagamentoService.RealizarDeposito` → `ContaService.Depositar`  | **201** | 400, 401, 503       |
-| POST   | `/api/transacoes/transferencia`  | sim   | `PagamentoService.ProcessarTransacao` → `ContaService.Transferir` | **201** | 400, 401, 422, 503  |
+| POST   | `/api/transacoes/deposito`       | sim   | `PagamentoService.RealizarDeposito` → `ContaService.Depositar`  | **201** | 400, 401, 409, 503  |
+| POST   | `/api/transacoes/transferencia`  | sim   | `PagamentoService.ProcessarTransacao` → `ContaService.Transferir` | **201** | 400, 401, 409, 422, 503 |
+| GET    | `/api/transacoes/{id}`           | sim   | `PagamentoService.ConsultarTransacao` (comprovante)             | 200     | 400, 401, 404       |
+
+As respostas **201** trazem o cabeçalho `Location` com o endereço do recurso criado: `/api/contas/me` no
+cadastro e `/api/transacoes/{id}` (o comprovante) no depósito e na transferência.
 
 Significado dos status:
 
@@ -79,7 +83,8 @@ Significado dos status:
 | 200 OK / 201 Created        | Consulta ou login bem-sucedidos / conta, depósito ou transferência criados                   |
 | 400 Bad Request             | JSON malformado, campo ausente, tipo ou formato inválido, campo desconhecido, transferência para a própria conta |
 | 401 Unauthorized            | Token ausente, inválido ou expirado (barrado no middleware) ou login com senha errada        |
-| 409 Conflict                | Cadastro com identificador de conta já existente                                             |
+| 404 Not Found               | Transação inexistente ou de outra conta (comprovante)                                        |
+| 409 Conflict                | Cadastro com conta já existente, ou conta ocupada por outra operação além de 2 s (nada é gravado; pode repetir) |
 | 422 Unprocessable Entity    | Transação válida recusada pela regra de negócio (fica registrada como `RECUSADA`)            |
 | 429 Too Many Requests       | Limite de requisições do nginx excedido                                                      |
 | 503 Service Unavailable     | Um microsserviço não respondeu no prazo                                                      |
@@ -113,10 +118,11 @@ nenhuma camada extra.
 | `PagamentoService` (Python)   | `ProcessarTransacao` | gateway                           |
 |                               | `RealizarDeposito`   | gateway                           |
 |                               | `ListarTransacoes`   | gateway                           |
+|                               | `ConsultarTransacao` | gateway                           |
 
 Valores monetários trafegam em centavos (`int64`), como no Trabalho 1, para evitar erros de
 arredondamento. Erros usam os códigos padrão do gRPC (`INVALID_ARGUMENT`, `ALREADY_EXISTS`,
-`UNAUTHENTICATED`, `UNAVAILABLE`...), e o gateway os traduz para HTTP.
+`UNAUTHENTICATED`, `ABORTED`, `UNAVAILABLE`...), e o gateway os traduz para HTTP.
 
 ## Banco de dados
 
@@ -144,6 +150,16 @@ respostas simuladas. A transferência usa `SELECT ... FOR UPDATE` com as contas 
 ordem, o que evita saldo lido em duplicidade e deadlocks. Num teste com 20 transferências simultâneas de
 R$ 100,00 a partir de um saldo de R$ 849,50, exatamente 8 foram aprovadas, 12 recusadas, e a soma dos
 saldos no banco permaneceu a mesma.
+
+Proteções contra operações presas:
+
+- **`lock_timeout` de 2 s e `statement_timeout` de 5 s** em todas as conexões dos dois serviços. Sem esses
+  limites, o PostgreSQL esperaria para sempre por uma conta bloqueada, prendendo threads e conexões do
+  pool. Quando um limite estoura, o banco faz rollback e o cliente recebe **409** "Conta ocupada por outra
+  operação; tente novamente".
+- **Prazo conferido antes do commit.** O `conta-service` recebe o prazo da chamada gRPC. Se o
+  `pagamento-service` já desistiu quando a transferência ou o depósito chega ao commit, a operação é
+  desfeita, em vez de mover dinheiro que o histórico registrou como `FALHA`.
 
 ## Segurança
 
@@ -215,9 +231,9 @@ VM, criar a VM com Docker, preencher o `.env` com `COMPOSE_PROFILES=gcp` e subir
 bash scripts/testar-api.sh https://localhost     # ou https://IP_DA_VM
 ```
 
-O script cria contas novas e confere 22 respostas: 401 sem token, 400 para dados inválidos e JSON
-malformado, 201 em cadastro, depósito e transferência, 409 para conta duplicada, 422 para saldo
-insuficiente e 200 nas consultas.
+O script cria contas novas e faz 26 verificações: 401 sem token, 400 para dados inválidos e JSON
+malformado, 201 em cadastro, depósito e transferência, o cabeçalho `Location`, 404 para comprovante
+inexistente, 409 para conta duplicada, 422 para saldo insuficiente e 200 nas consultas.
 
 Também é possível testar pelo **Swagger** (`https://<host>/api/docs`) ou pelo **Postman/Insomnia**,
 importando [docs/postman/Fintech-SD.postman_collection.json](docs/postman/Fintech-SD.postman_collection.json).
@@ -228,7 +244,8 @@ O passo a passo está na seção 5 de [docs/guia-execucao.md](docs/guia-execucao
 - O certificado HTTPS é autoassinado. Com um domínio próprio, basta montar um certificado válido em
   `/etc/nginx/certs` (ver [docs/gcp.md](docs/gcp.md)).
 - O tráfego gRPC interno não usa TLS porque fica restrito à rede privada do Docker na VM.
-- Uma transação marcada como `FALHA` (o conta-service não respondeu) não é repetida automaticamente, para
-  evitar débito duplicado. O status indica que o resultado não foi confirmado.
+- Uma transação marcada como `FALHA` (o conta-service não respondeu a tempo) não é repetida
+  automaticamente, para evitar débito duplicado. O conta-service desfaz a operação se o prazo acabar antes
+  do commit, mas ainda há uma janela pequena: o commit terminar e a resposta se perder na rede.
 - O JWT não tem renovação (refresh token) nem lista de revogação: o usuário entra de novo quando o token
   expira (30 minutos por padrão).

@@ -20,10 +20,16 @@ class Config:
     db_senha: str
 
     def conninfo(self) -> str:
-        """String de conexão no formato aceito pelo psycopg (libpq)."""
+        """String de conexão no formato aceito pelo psycopg (libpq).
+
+        options define limites para cada sessão: no máximo 2 s esperando um lock e 5 s
+        por comando. Sem eles o PostgreSQL espera para sempre, e uma consulta travada
+        prenderia uma thread gRPC e uma conexão do pool.
+        """
         return (
             f"host={self.db_host} port={self.db_porta} dbname={self.db_nome} "
-            f"user={self.db_usuario} password={self.db_senha}"
+            f"user={self.db_usuario} password={self.db_senha} "
+            "options='-c lock_timeout=2s -c statement_timeout=5s'"
         )
 
 

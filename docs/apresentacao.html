@@ -200,6 +200,7 @@
   <span class="k">rpc</span> ProcessarTransacao(ProcessarTransacaoRequest) <span class="k">returns</span> (...);
   <span class="k">rpc</span> RealizarDeposito(RealizarDepositoRequest) <span class="k">returns</span> (...);
   <span class="k">rpc</span> ListarTransacoes(ListarTransacoesRequest) <span class="k">returns</span> (...);
+  <span class="k">rpc</span> ConsultarTransacao(ConsultarTransacaoRequest) <span class="k">returns</span> (Transacao);
 }</pre>
     </div>
     <div style="display:flex;flex-direction:column;gap:14px;">
@@ -214,7 +215,7 @@ request = conta_pb2.TransferirRequest(
       <div class="cartao">
         <h3>Erros padronizados</h3>
         <p>Os serviços usam os códigos gRPC, e o gateway os converte:</p>
-        <p><code>INVALID_ARGUMENT</code>→400 · <code>UNAUTHENTICATED</code>→401 · <code>ALREADY_EXISTS</code>→409 · <code>UNAVAILABLE</code>/<code>DEADLINE_EXCEEDED</code>→503</p>
+        <p><code>INVALID_ARGUMENT</code>→400 · <code>UNAUTHENTICATED</code>→401 · <code>ALREADY_EXISTS</code>/<code>ABORTED</code>→409 · <code>UNAVAILABLE</code>/<code>DEADLINE_EXCEEDED</code>→503</p>
       </div>
     </div>
   </div>
@@ -234,12 +235,14 @@ request = conta_pb2.TransferirRequest(
       <tr><td><code>GET /api/contas/me/extrato</code></td><td>✔</td><td><span class="java">ConsultarSaldo</span> ∥ <span class="py">ListarTransacoes</span></td><td>200</td></tr>
       <tr><td><code>POST /api/transacoes/deposito</code></td><td>✔</td><td class="py">RealizarDeposito</td><td>201</td></tr>
       <tr><td><code>POST /api/transacoes/transferencia</code></td><td>✔</td><td class="py">ProcessarTransacao</td><td>201</td></tr>
+      <tr><td><code>GET /api/transacoes/{id}</code></td><td>✔</td><td class="py">ConsultarTransacao</td><td>200</td></tr>
     </table>
     <div style="display:flex;flex-direction:column;gap:12px;">
       <div class="cartao">
         <p><span class="erro">400</span> JSON malformado, campo ausente, formato ou valor inválido, campo extra</p>
         <p><span class="erro">401</span> sem token, token inválido ou expirado (barrado no middleware)</p>
-        <p><span class="erro">409</span> conta já cadastrada · <span class="erro">422</span> saldo insuficiente</p>
+        <p><span class="erro">404</span> comprovante inexistente · <span class="erro">409</span> conta duplicada ou ocupada</p>
+        <p><span class="erro">422</span> saldo insuficiente · 201 com cabeçalho <code>Location</code></p>
         <p><span class="erro">503</span> microsserviço sem resposta</p>
       </div>
 <pre style="font-size:13px;"><span class="c">POST /api/transacoes/deposito {"valor": 10.555}</span>
@@ -283,6 +286,7 @@ request = conta_pb2.TransferirRequest(
         <li>Bancos e usuários criados pelo contêiner <code>preparar-banco</code></li>
         <li>Nenhum dado em memória ou simulado: tudo é lido e gravado no banco</li>
         <li>Transação gravada como <code>PENDENTE</code> e atualizada após o gRPC</li>
+        <li><code>lock_timeout</code> 2 s e <code>statement_timeout</code> 5 s; prazo gRPC conferido antes do commit</li>
       </ul>
     </div>
     <div style="display:flex;flex-direction:column;gap:14px;">
@@ -338,9 +342,10 @@ request = conta_pb2.TransferirRequest(
         <li><span class="erro">400</span> campos ausentes, formato inválido, JSON malformado</li>
         <li><span class="ok">201</span> cadastro, depósito e transferência</li>
         <li><span class="erro">409</span> conta duplicada · <span class="erro">422</span> saldo insuficiente</li>
+        <li><span class="erro">404</span> comprovante inexistente · cabeçalho <code>Location</code></li>
         <li><span class="ok">200</span> login, saldo e extrato</li>
       </ul>
-      <p class="destaque" style="margin-top:10px;">22 verificações, 0 falhas</p>
+      <p class="destaque" style="margin-top:10px;">26 verificações, 0 falhas</p>
     </div>
   </div>
 </section>

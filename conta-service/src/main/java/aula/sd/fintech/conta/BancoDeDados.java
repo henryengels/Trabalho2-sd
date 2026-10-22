@@ -24,6 +24,10 @@ public final class BancoDeDados {
         config.setUsername(usuario);
         config.setPassword(senha);
         config.setMaximumPoolSize(10);
+        // Limites de cada conexão: no máximo 2 s esperando um lock (ex.: conta bloqueada por
+        // outra transferência) e 5 s por comando. Sem eles o PostgreSQL espera para sempre,
+        // e uma consulta travada prenderia uma thread gRPC e uma conexão do pool.
+        config.setConnectionInitSql("SET lock_timeout = '2s'; SET statement_timeout = '5s'");
         // Em contêineres, o banco (ou o Cloud SQL Auth Proxy) pode demorar alguns
         // segundos para aceitar conexões. O pool insiste por até 60 s antes de desistir.
         config.setInitializationFailTimeout(60_000);
