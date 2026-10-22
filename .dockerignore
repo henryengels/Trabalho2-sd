@@ -1,0 +1,16 @@
+# Nada disto é necessário para construir as imagens. O .env, em especial, nunca
+# deve entrar numa imagem: os valores chegam aos contêineres pelo docker-compose.yml.
+.env
+.git
+.github
+.idea
+.vscode
+docs
+scripts
+**/target
+**/__pycache__
+**/*.pyc
+**/gerado
+**/.venv
+**/venv
+**/*.md

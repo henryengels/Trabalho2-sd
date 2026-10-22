@@ -1,0 +1,16 @@
+# Normaliza quebras de linha para o repositorio ser usado no Windows e no Linux (GCP).
+* text=auto
+
+# Scripts de shell precisam de LF, senao o Linux falha com "bad interpreter".
+mvnw text eol=lf
+*.sh text eol=lf
+
+# Scripts do Windows ficam com CRLF.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Binarios nunca sao convertidos.
+*.jar binary
+*.png binary
+*.jpg binary
+*.pdf binary

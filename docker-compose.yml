@@ -1,0 +1,144 @@
+# Sobe o sistema completo com "docker compose up -d --build".
+#
+# Apenas o nginx publica portas (80 e 443). Gateway, microsserviços gRPC e banco
+# ficam na rede interna do Compose e se encontram pelo nome do serviço.
+#
+# O servidor PostgreSQL depende do perfil definido em COMPOSE_PROFILES no .env:
+#   local → PostgreSQL 18 em contêiner (desenvolvimento na própria máquina)
+#   gcp   → Cloud SQL for PostgreSQL 18, acessado pelo Cloud SQL Auth Proxy (VM no Google Cloud)
+# Nos dois casos o servidor atende pelo nome "banco" na porta 5432, então os
+# microsserviços não mudam de configuração entre os ambientes.
+#
+# Cada microsserviço tem o próprio banco e o próprio usuário (database-per-service):
+#   conta-service     → banco fintech_contas,     usuário conta_app
+#   pagamento-service → banco fintech_pagamentos, usuário pagamento_app
+name: fintech
+
+services:
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    ports:
+      - "${PORTA_HTTP:-80}:80"
+      - "${PORTA_HTTPS:-443}:443"
+    environment:
+      DOMINIO_CERTIFICADO: ${DOMINIO_CERTIFICADO:-localhost}
+    depends_on:
+      - api-gateway
+    restart: unless-stopped
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
+    environment:
+      JWT_SEGREDO: ${JWT_SEGREDO:?defina JWT_SEGREDO no .env (mínimo de 32 caracteres)}
+      JWT_EXPIRACAO_MINUTOS: ${JWT_EXPIRACAO_MINUTOS:-30}
+      CORS_ORIGENS: ${CORS_ORIGENS:-https://localhost}
+      DOCS_HABILITADA: ${DOCS_HABILITADA:-true}
+      CONTAS_HOST: conta-service
+      CONTAS_PORTA: "9091"
+      PAGAMENTOS_HOST: pagamento-service
+      PAGAMENTOS_PORTA: "9090"
+    expose:
+      - "8000"
+    depends_on:
+      - conta-service
+      - pagamento-service
+    restart: unless-stopped
+
+  # Microsserviço de contas (Java 21 + gRPC + JDBC).
+  conta-service:
+    build:
+      context: .
+      dockerfile: conta-service/Dockerfile
+    environment:
+      PORTA: "9091"
+      DB_URL: jdbc:postgresql://banco:5432/fintech_contas
+      DB_USUARIO: conta_app
+      DB_SENHA: ${DB_CONTAS_SENHA:?defina DB_CONTAS_SENHA no .env}
+    expose:
+      - "9091"
+    depends_on:
+      preparar-banco:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # Microsserviço de pagamentos (Python 3.12 + gRPC + psycopg).
+  pagamento-service:
+    build:
+      context: .
+      dockerfile: pagamento-service/Dockerfile
+    environment:
+      PORTA: "9090"
+      CONTAS_HOST: conta-service
+      CONTAS_PORTA: "9091"
+      DB_HOST: banco
+      DB_PORTA: "5432"
+      DB_NOME: fintech_pagamentos
+      DB_USUARIO: pagamento_app
+      DB_SENHA: ${DB_PAGAMENTOS_SENHA:?defina DB_PAGAMENTOS_SENHA no .env}
+    expose:
+      - "9090"
+    depends_on:
+      conta-service:
+        condition: service_started
+      preparar-banco:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # Tarefa única: espera o servidor PostgreSQL responder e cria (ou atualiza) os bancos
+  # e usuários dos microsserviços com banco/preparar-bancos.sql. Termina em seguida.
+  preparar-banco:
+    image: postgres:18-alpine
+    environment:
+      PGHOST: banco
+      PGUSER: postgres
+      PGPASSWORD: ${DB_ADMIN_SENHA:?defina DB_ADMIN_SENHA no .env}
+      PGDATABASE: postgres
+      SENHA_CONTAS: ${DB_CONTAS_SENHA:?defina DB_CONTAS_SENHA no .env}
+      SENHA_PAGAMENTOS: ${DB_PAGAMENTOS_SENHA:?defina DB_PAGAMENTOS_SENHA no .env}
+    volumes:
+      - ./banco/preparar-bancos.sql:/preparar-bancos.sql:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        until pg_isready -q -t 2; do echo "Aguardando o PostgreSQL em $$PGHOST..."; sleep 2; done;
+        psql -q -v senha_contas="$$SENHA_CONTAS" -v senha_pagamentos="$$SENHA_PAGAMENTOS"
+        -f /preparar-bancos.sql
+    restart: "no"
+
+  # Perfil "local": PostgreSQL 18 com os dados num volume Docker (sobrevivem a reinícios).
+  postgres:
+    image: postgres:18-alpine
+    profiles: ["local"]
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_ADMIN_SENHA:?defina DB_ADMIN_SENHA no .env}
+    volumes:
+      # A partir do PostgreSQL 18, a imagem oficial guarda os dados em /var/lib/postgresql/18/docker.
+      - dados-postgres:/var/lib/postgresql
+    networks:
+      default:
+        aliases:
+          - banco
+    restart: unless-stopped
+
+  # Perfil "gcp": túnel autenticado e criptografado até o Cloud SQL. Usa a service
+  # account da VM (papel Cloud SQL Client), sem liberar IPs na instância.
+  cloud-sql-proxy:
+    image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.1
+    profiles: ["gcp"]
+    command:
+      - "--address=0.0.0.0"
+      - "--port=5432"
+      - "${CLOUD_SQL_INSTANCIA:-defina-CLOUD_SQL_INSTANCIA-no-.env}"
+    networks:
+      default:
+        aliases:
+          - banco
+    restart: unless-stopped
+
+volumes:
+  dados-postgres:

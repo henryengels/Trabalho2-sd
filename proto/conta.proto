@@ -1,0 +1,100 @@
+// Usa a versão 3 da linguagem Protocol Buffers.
+syntax = "proto3";
+
+// Namespace do contrato Protobuf. Não precisa ser igual ao pacote Java.
+package conta;
+
+// Gera uma classe Java separada para cada mensagem e serviço.
+option java_multiple_files = true;
+// Pacote das classes Java criadas a partir deste arquivo (conta-service, em Java).
+// Os serviços Python (api-gateway e pagamento-service) geram conta_pb2.py a partir
+// deste mesmo arquivo.
+option java_package = "aula.sd.fintech.grpc";
+
+// Serviço interno implementado em Java. É o dono das contas: guarda titular,
+// credencial e saldo, e é o único ponto que altera saldos no banco de dados.
+service ContaService {
+  // Abre uma conta nova com saldo zero. Falha com ALREADY_EXISTS se o
+  // identificador já estiver em uso.
+  rpc CriarConta(CriarContaRequest)
+      returns (CriarContaResponse);
+
+  // Confere a senha da conta. Falha com UNAUTHENTICATED se conta ou senha
+  // estiverem incorretas (sem revelar qual das duas).
+  rpc Autenticar(AutenticarRequest)
+      returns (AutenticarResponse);
+
+  // Devolve o saldo atual de uma conta.
+  rpc ConsultarSaldo(ConsultarSaldoRequest)
+      returns (ConsultarSaldoResponse);
+
+  // Valida e efetiva uma transferência entre duas contas numa única transação
+  // do banco (débito e crédito acontecem juntos ou não acontecem).
+  rpc Transferir(TransferirRequest)
+      returns (TransferirResponse);
+
+  // Credita um valor em uma conta.
+  rpc Depositar(DepositarRequest)
+      returns (DepositarResponse);
+}
+
+message CriarContaRequest {
+  // Identificador escolhido pelo cliente (ex.: "ana"). Também é o login.
+  string conta = 1;
+  string titular = 2;
+  // A senha trafega apenas na rede interna e é guardada como hash BCrypt.
+  string senha = 3;
+}
+
+message CriarContaResponse {
+  string conta = 1;
+  string titular = 2;
+  int64 saldo_centavos = 3;
+}
+
+message AutenticarRequest {
+  string conta = 1;
+  string senha = 2;
+}
+
+message AutenticarResponse {
+  string conta = 1;
+  string titular = 2;
+}
+
+message ConsultarSaldoRequest {
+  string conta = 1;
+}
+
+message ConsultarSaldoResponse {
+  string conta = 1;
+  bool existe = 2;
+  // Valores monetários trafegam em centavos (inteiro) para evitar erros de
+  // arredondamento de ponto flutuante.
+  int64 saldo_centavos = 3;
+  string mensagem = 4;
+  string titular = 5;
+}
+
+message TransferirRequest {
+  string conta_origem = 1;
+  string conta_destino = 2;
+  int64 valor_centavos = 3;
+}
+
+message TransferirResponse {
+  bool aprovada = 1;
+  string mensagem = 2;
+  int64 saldo_origem_centavos = 3;
+}
+
+message DepositarRequest {
+  string conta = 1;
+  int64 valor_centavos = 2;
+}
+
+message DepositarResponse {
+  bool aprovada = 1;
+  string mensagem = 2;
+  int64 saldo_centavos = 3;
+}

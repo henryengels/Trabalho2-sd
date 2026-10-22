@@ -1,0 +1,76 @@
+// Usa a versão 3 da linguagem Protocol Buffers.
+syntax = "proto3";
+
+// Namespace do contrato Protobuf. Não precisa ser igual ao pacote Java.
+package pagamento;
+
+// Tipo padrão do Protobuf para data e hora (segundos + nanossegundos desde 1970, UTC).
+import "google/protobuf/timestamp.proto";
+
+// Gera uma classe Java separada para cada mensagem e serviço.
+option java_multiple_files = true;
+// Pacote das classes Java criadas a partir deste arquivo.
+option java_package = "aula.sd.fintech.grpc";
+
+// Serviço interno implementado em Python. Registra cada transação no banco de
+// dados e delega a movimentação dos saldos ao ContaService (Java).
+service PagamentoService {
+  // RPC unário: recebe uma transferência e devolve uma única resposta.
+  rpc ProcessarTransacao(ProcessarTransacaoRequest)
+      returns (ProcessarTransacaoResponse);
+
+  // Registra um depósito e pede ao ContaService que credite o valor.
+  rpc RealizarDeposito(RealizarDepositoRequest)
+      returns (ProcessarTransacaoResponse);
+
+  // Lista as transações em que a conta aparece como origem ou destino,
+  // da mais recente para a mais antiga.
+  rpc ListarTransacoes(ListarTransacoesRequest)
+      returns (ListarTransacoesResponse);
+}
+
+// Mensagem enviada ao chamar ProcessarTransacao.
+message ProcessarTransacaoRequest {
+  // Os números identificam os campos no formato binário.
+  string conta_origem = 1;
+  string conta_destino = 2;
+  int64 valor_centavos = 3;
+}
+
+// Mensagem devolvida após processar uma transferência ou um depósito.
+message ProcessarTransacaoResponse {
+  string transacao_id = 1;
+  // APROVADA, RECUSADA ou FALHA.
+  string status = 2;
+  string mensagem = 3;
+  // Para depósito, é o saldo da própria conta creditada.
+  int64 saldo_origem_centavos = 4;
+}
+
+message RealizarDepositoRequest {
+  string conta = 1;
+  int64 valor_centavos = 2;
+}
+
+message ListarTransacoesRequest {
+  string conta = 1;
+  // Quantidade máxima de itens devolvidos (1 a 100).
+  int32 limite = 2;
+}
+
+message Transacao {
+  string id = 1;
+  // TRANSFERENCIA ou DEPOSITO.
+  string tipo = 2;
+  // Vazio em depósitos.
+  string conta_origem = 3;
+  string conta_destino = 4;
+  int64 valor_centavos = 5;
+  string status = 6;
+  string mensagem = 7;
+  google.protobuf.Timestamp criada_em = 8;
+}
+
+message ListarTransacoesResponse {
+  repeated Transacao transacoes = 1;
+}

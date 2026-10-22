@@ -1,0 +1,40 @@
+### Segredos ###
+.env
+nginx/certs/
+
+### Java / Maven ###
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### Python ###
+__pycache__/
+*.pyc
+.venv/
+venv/
+# Stubs gRPC gerados a partir de proto/ (recriados no build).
+gerado/
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### Eclipse / STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### VS Code ###
+.vscode/
+
+### Arquivos temporários ###
+*.tmp
+*.swp
+*~

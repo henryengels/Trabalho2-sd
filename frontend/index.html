@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fintech SD</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f766e'/%3E%3Cpath d='M9 21h14M9 16h14M9 11h9' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="estilos.css">
+  <!-- Todo o comportamento fica em app.js (sem script inline, compatível com a CSP do nginx). -->
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="topo">
+    <div class="marca">
+      <span class="marca-icone" aria-hidden="true"></span>
+      <span>Fintech <strong>SD</strong></span>
+    </div>
+    <div id="usuario-topo" class="usuario-topo" hidden>
+      <span id="topo-titular"></span>
+      <span id="topo-conta" class="conta-id"></span>
+      <button id="botao-sair" class="botao botao-fantasma" type="button">Sair</button>
+    </div>
+  </header>
+
+  <div id="aviso" class="aviso" role="status" aria-live="polite" hidden></div>
+
+  <!-- Tela de acesso: login e abertura de conta -->
+  <main id="tela-acesso" class="tela-acesso">
+    <section class="cartao cartao-acesso">
+      <h1>Sua conta digital</h1>
+      <p class="subtitulo">Transferências e depósitos processados por microsserviços gRPC, com os dados no PostgreSQL.</p>
+
+      <div class="abas" role="tablist">
+        <button id="aba-login" class="aba ativa" role="tab" aria-selected="true" type="button">Entrar</button>
+        <button id="aba-registro" class="aba" role="tab" aria-selected="false" type="button">Abrir conta</button>
+      </div>
+
+      <form id="form-login" class="formulario" novalidate>
+        <label>Conta
+          <input name="conta" autocomplete="username" placeholder="ex.: ana" required>
+        </label>
+        <label>Senha
+          <input name="senha" type="password" autocomplete="current-password" required>
+        </label>
+        <button class="botao botao-primario" type="submit">Entrar</button>
+      </form>
+
+      <form id="form-registro" class="formulario" novalidate hidden>
+        <label>Nome do titular
+          <input name="titular" autocomplete="name" placeholder="ex.: Ana Souza" required>
+        </label>
+        <label>Conta (login)
+          <input name="conta" autocomplete="username" placeholder="3 a 30 letras minúsculas, números, . _ -" required>
+        </label>
+        <label>Senha
+          <input name="senha" type="password" autocomplete="new-password" placeholder="mínimo de 8 caracteres" required>
+        </label>
+        <button class="botao botao-primario" type="submit">Abrir conta</button>
+      </form>
+    </section>
+  </main>
+
+  <!-- Painel da conta autenticada -->
+  <main id="tela-painel" class="tela-painel" hidden>
+    <section class="cartao cartao-saldo">
+      <span class="rotulo">Saldo disponível</span>
+      <strong id="saldo" class="saldo">R$ 0,00</strong>
+      <button id="botao-atualizar" class="botao botao-fantasma" type="button">Atualizar</button>
+    </section>
+
+    <div class="grade-operacoes">
+      <section class="cartao">
+        <h2>Depositar</h2>
+        <form id="form-deposito" class="formulario" novalidate>
+          <label>Valor (R$)
+            <input name="valor" inputmode="decimal" placeholder="ex.: 1000,00" required>
+          </label>
+          <button class="botao botao-primario" type="submit">Depositar</button>
+        </form>
+      </section>
+
+      <section class="cartao">
+        <h2>Transferir</h2>
+        <form id="form-transferencia" class="formulario" novalidate>
+          <label>Conta de destino
+            <input name="conta_destino" placeholder="ex.: bruno" required>
+          </label>
+          <label>Valor (R$)
+            <input name="valor" inputmode="decimal" placeholder="ex.: 150,50" required>
+          </label>
+          <button class="botao botao-primario" type="submit">Transferir</button>
+        </form>
+      </section>
+    </div>
+
+    <section class="cartao">
+      <h2>Extrato</h2>
+      <div class="tabela-rolagem">
+        <table class="extrato">
+          <thead>
+            <tr><th>Data</th><th>Descrição</th><th>Status</th><th class="num">Valor</th></tr>
+          </thead>
+          <tbody id="linhas-extrato"></tbody>
+        </table>
+      </div>
+      <p id="extrato-vazio" class="vazio" hidden>Nenhuma transação ainda. Faça um depósito para começar.</p>
+    </section>
+  </main>
+
+  <footer class="rodape">
+    Frontend → nginx (HTTPS) → API Gateway FastAPI → gRPC → conta-service (Java) · pagamento-service (Python) → PostgreSQL
+  </footer>
+</body>
+</html>
