@@ -32,8 +32,10 @@ Repositório: <https://github.com/henryengels/Trabalho2-sd> · Apresentação: [
 | `postgres`          | PostgreSQL 18                                | 5432            | Servidor em contêiner para desenvolvimento (perfil `local`)                   |
 | `preparar-banco`    | psql (tarefa única)                          | —               | Cria os bancos e usuários de cada microsserviço antes de eles iniciarem       |
 
-Somente o nginx publica portas. O gateway, os serviços gRPC e o banco ficam na rede interna do Docker
-Compose, então o navegador só alcança os microsserviços passando pelo gateway.
+Somente o nginx publica portas para a rede. O gateway, os serviços gRPC e o banco ficam na rede interna
+do Docker Compose, então o navegador só alcança os microsserviços passando pelo gateway. No perfil
+`local`, o PostgreSQL também fica acessível em `127.0.0.1:15432` (apenas na própria máquina), para
+ferramentas como o DBeaver.
 
 ![Painel do frontend](docs/img/tela-painel.png)
 
@@ -164,8 +166,9 @@ saldos no banco permaneceu a mesma.
 - **Banco por serviço**: cada microsserviço usa um usuário sem privilégios de administrador que só tem
   acesso ao próprio banco.
 - **SQL parametrizado** em Java (`PreparedStatement`) e Python (`%s` do psycopg).
-- **Rede interna**: só 80/443 são publicados. O banco no Google Cloud é acessado pelo Cloud SQL Auth Proxy
-  (TLS + IAM), sem IP liberado na instância.
+- **Rede interna**: só 80/443 são publicados para a rede. No perfil `local`, o PostgreSQL fica em
+  `127.0.0.1`, inacessível a outros computadores. O banco no Google Cloud é acessado pelo Cloud SQL Auth
+  Proxy (TLS + IAM), sem IP liberado na instância.
 - **Contêineres sem root** (gateway, serviços Java e Python).
 
 ## Estrutura do repositório
@@ -180,7 +183,7 @@ banco/                    script que cria os bancos e usuários de cada microsse
 frontend/                 interface web (index.html, estilos.css, app.js)
 nginx/                    configuração do proxy HTTPS, snippets e geração do certificado
 scripts/testar-api.sh     teste de ponta a ponta da API (status HTTP esperados)
-docs/                     guias de execução, diagrama e apresentação
+docs/                     guias de execução, diagrama, apresentação e coleção do Postman
 docker-compose.yml        orquestração dos contêineres (perfis local e gcp)
 .env.example              modelo das variáveis de ambiente e segredos
 pom.xml, mvnw             build Maven da parte Java
@@ -215,6 +218,10 @@ bash scripts/testar-api.sh https://localhost     # ou https://IP_DA_VM
 O script cria contas novas e confere 22 respostas: 401 sem token, 400 para dados inválidos e JSON
 malformado, 201 em cadastro, depósito e transferência, 409 para conta duplicada, 422 para saldo
 insuficiente e 200 nas consultas.
+
+Também é possível testar pelo **Swagger** (`https://<host>/api/docs`) ou pelo **Postman/Insomnia**,
+importando [docs/postman/Fintech-SD.postman_collection.json](docs/postman/Fintech-SD.postman_collection.json).
+O passo a passo está na seção 5 de [docs/guia-execucao.md](docs/guia-execucao.md).
 
 ## Limitações conhecidas
 

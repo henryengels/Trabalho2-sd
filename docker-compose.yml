@@ -113,6 +113,10 @@ services:
   postgres:
     image: postgres:18-alpine
     profiles: ["local"]
+    # Publicado só em 127.0.0.1: ferramentas da própria máquina (DBeaver, pgAdmin) conectam,
+    # mas outros computadores da rede não. Na GCP este serviço não existe.
+    ports:
+      - "127.0.0.1:${PORTA_BANCO_LOCAL:-15432}:5432"
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${DB_ADMIN_SENHA:?defina DB_ADMIN_SENHA no .env}

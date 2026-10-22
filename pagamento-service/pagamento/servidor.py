@@ -22,7 +22,17 @@ def main() -> None:
 
     # Pool de conexões com o PostgreSQL. Em contêineres, o banco (ou o Cloud SQL Auth
     # Proxy) pode demorar a aceitar conexões; open(wait=True) espera até 60 s.
-    pool = ConnectionPool(config.conninfo(), name="pagamento-service", min_size=1, max_size=10, open=False)
+    # check_connection testa cada conexão antes de entregá-la: se o servidor reiniciou
+    # (manutenção do Cloud SQL, por exemplo), a conexão morta é trocada por uma nova em
+    # vez de causar erro na requisição.
+    pool = ConnectionPool(
+        config.conninfo(),
+        name="pagamento-service",
+        min_size=1,
+        max_size=10,
+        open=False,
+        check=ConnectionPool.check_connection,
+    )
     pool.open(wait=True, timeout=60)
 
     repositorio = TransacaoRepositorio(pool)

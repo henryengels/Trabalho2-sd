@@ -195,6 +195,10 @@ como `Up`. Os contêineres têm `restart: unless-stopped`, então voltam sozinho
 bash scripts/testar-api.sh https://IP_DA_VM
 ```
 
+- Postman ou Insomnia: importe `docs/postman/Fintech-SD.postman_collection.json` e troque a variável
+  `base_url` para `https://IP_DA_VM`. As instruções completas, inclusive as do Swagger, estão na seção 5 do
+  [guia de execução](guia-execucao.md).
+
 ## 8. Consultar e alterar os dados no Cloud SQL
 
 Os dados da nuvem ficam só no Cloud SQL e não se misturam com o banco local da sua máquina.
@@ -230,6 +234,43 @@ gcloud sql connect $INSTANCIA --user=postgres --database=fintech_contas
 ```
 
 O `gcloud` libera o IP do Cloud Shell por 5 minutos e pede a senha do `postgres`.
+
+**Opção D: DBeaver no seu computador.** O Cloud SQL só aceita conexões vindas da internet de IPs
+autorizados. Libere o IP da sua conexão e exija criptografia. No Cloud Shell:
+
+```bash
+source ~/fintech-vars.sh
+gcloud sql instances patch $INSTANCIA --ssl-mode=ENCRYPTED_ONLY
+```
+
+Descubra o IP público da sua internet abrindo <https://ifconfig.me> no navegador do computador onde está
+o DBeaver. Troque `SEU_IP` abaixo:
+
+```bash
+gcloud sql instances patch $INSTANCIA --authorized-networks=SEU_IP/32
+gcloud sql instances describe $INSTANCIA --format='value(ipAddresses[0].ipAddress)'
+```
+
+Responda `Y` se o `gcloud` pedir confirmação. A última linha mostra o **IP do Cloud SQL**, que não é o IP
+da VM. No DBeaver, em **Nova conexão → PostgreSQL**:
+
+| Campo             | Valor                                                              |
+|-------------------|--------------------------------------------------------------------|
+| Host              | IP do Cloud SQL                                                    |
+| Port              | `5432`                                                             |
+| Database          | `postgres`                                                         |
+| Username          | `postgres`                                                         |
+| Password          | `DB_ADMIN_SENHA` (`grep ADMIN ~/fintech.env` no Cloud Shell)       |
+| Aba **PostgreSQL**| marque **Show all databases**                                      |
+| Aba **SSL**       | marque **Use SSL** e escolha **SSL mode: require**                 |
+
+Cuidados:
+
+- `--authorized-networks` substitui a lista inteira de IPs liberados.
+- O IP de casa costuma mudar. Se o DBeaver parar de conectar, repita o comando com o IP novo.
+- Ao terminar, retire a liberação com `gcloud sql instances patch $INSTANCIA --clear-authorized-networks`.
+
+A aplicação não é afetada por nenhum desses comandos, porque usa o Auth Proxy.
 
 ## 9. Atualizar o código na VM
 
@@ -307,3 +348,4 @@ O script de inicialização do nginx só gera um certificado autoassinado quando
 | Navegador não abre `https://IP` | Regra de firewall ausente ou IP mudou | Confira o passo 4 e o IP atual da VM |
 | Build interrompido (`Killed`) | Pouca memória na VM | Use `e2-medium` ou maior |
 | `permission denied ... docker.sock` | Usuário fora do grupo `docker` | Saia e entre de novo na VM após o `usermod` |
+| `permission denied for schema conta` (ou `pagamento`) ao consultar como `postgres` | No Cloud SQL o `postgres` não é superusuário, e as tabelas pertencem a `conta_app`/`pagamento_app`. Versões do `banco/preparar-bancos.sql` sem os comandos `GRANT ... TO CURRENT_USER` | `git pull && docker compose up -d` na VM. O `preparar-banco` roda de novo e dá ao `postgres` acesso às tabelas |

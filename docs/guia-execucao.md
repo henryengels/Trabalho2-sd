@@ -90,7 +90,43 @@ Roteiro de demonstração no frontend:
 7. Tentar abrir conta com `Ana!` e senha `123`: os erros de validação (HTTP 400) aparecem embaixo de cada
    campo.
 
-## 5. Teste automático da API
+## 5. Testar os endpoints
+
+Base da API: `https://localhost/api`. As rotas protegidas exigem o cabeçalho
+`Authorization: Bearer <access_token>`, e o token vem de `POST /api/auth/login`.
+
+### Swagger (já incluso, pelo navegador)
+
+1. Abra <https://localhost/api/docs>.
+2. Em `POST /api/auth/login`, clique em **Try it out**, preencha `conta` e `senha` e clique em **Execute**.
+3. Copie o valor de `access_token` da resposta.
+4. Clique em **Authorize** (cadeado no topo), cole **só o token**, sem a palavra `Bearer`, e confirme.
+5. As demais rotas passam a enviar o token. Use **Try it out → Execute** em cada uma.
+
+### Postman
+
+O arquivo [postman/Fintech-SD.postman_collection.json](postman/Fintech-SD.postman_collection.json) traz
+todas as rotas, na ordem, com os casos de sucesso e de erro (201, 200, 400, 401, 409, 422).
+
+1. No Postman: **Import** → selecione o arquivo da coleção.
+2. Desative a verificação do certificado autoassinado: **Settings → General → SSL certificate
+   verification: OFF**.
+3. Na coleção, aba **Variables**, confira `base_url` (`https://localhost`, ou `https://IP_DA_VM` na GCP).
+4. Rode tudo com **Run collection**, ou uma requisição por vez, de cima para baixo.
+
+Os registros criam contas novas a cada execução, e o login guarda o JWT na variável `token`, que as rotas
+protegidas usam automaticamente. Cada requisição tem testes que conferem o status HTTP esperado.
+
+### Insomnia
+
+**Import** → selecione o mesmo arquivo `Fintech-SD.postman_collection.json` (o Insomnia aceita coleções do
+Postman). Em **Preferences → Request/Response**, desmarque **Validate certificates**. Se os scripts da
+coleção não rodarem na sua versão do Insomnia, depois do login copie o `access_token` para a variável
+`token` e preencha `conta`/`destino` com os identificadores usados nos registros.
+
+O CORS não afeta Postman nem Insomnia: ele só vale para páginas abertas no navegador.
+
+### Script de linha de comando
 
 ```bash
 bash scripts/testar-api.sh https://localhost
@@ -98,14 +134,39 @@ bash scripts/testar-api.sh https://localhost
 
 No Windows, rode pelo **Git Bash**. O script termina com `22 verificações, 0 falha(s).`
 
-Se for executado várias vezes seguidas, pode receber `429 Too Many Requests`: é o rate limit do nginx nas
-rotas de login e cadastro (30 por minuto). Aguarde um minuto e rode de novo.
+Se os testes forem executados várias vezes seguidas, pode aparecer `429 Too Many Requests`: é o rate
+limit do nginx nas rotas de login e cadastro (30 por minuto). Aguarde um minuto e rode de novo.
 
 ## 6. Consultar e alterar o banco local
 
 O servidor fica no contêiner `postgres`, com os dados no volume Docker `fintech_dados-postgres`. Eles
 sobrevivem a `docker compose restart` e `docker compose down` e são independentes do Cloud SQL: o que é
 criado aqui não aparece na nuvem, e vice-versa.
+
+### Pelo DBeaver (ou pgAdmin)
+
+No perfil `local`, o PostgreSQL fica acessível **só na própria máquina**, em `127.0.0.1:15432` (variável
+`PORTA_BANCO_LOCAL` do `.env`). No DBeaver, crie a conexão em **Banco de dados → Nova conexão → PostgreSQL**:
+
+| Campo             | Valor                                                        |
+|-------------------|--------------------------------------------------------------|
+| Host              | `localhost`                                                  |
+| Port              | `15432`                                                      |
+| Database          | `postgres`                                                   |
+| Username          | `postgres`                                                   |
+| Password          | o valor de `DB_ADMIN_SENHA` no `.env`                        |
+| Aba **PostgreSQL**| marque **Show all databases**                                |
+
+Com **Show all databases**, os dois bancos aparecem na árvore: `fintech_contas → Schemas → conta →
+Tables → contas` e `fintech_pagamentos → Schemas → pagamento → Tables → transacoes`. Dê dois cliques na
+tabela e abra a aba **Data** para ver e editar os registros.
+
+Para entrar só no banco de um serviço, como a aplicação faz, use `Database: fintech_contas`,
+`Username: conta_app` e `Password: DB_CONTAS_SENHA`. Esse usuário não consegue abrir o `fintech_pagamentos`.
+
+O DBeaver baixa o driver do PostgreSQL na primeira conexão; aceite o download.
+
+### Pelo terminal (psql)
 
 Abrir o `psql` em cada banco, com o administrador:
 
@@ -190,3 +251,6 @@ A pasta `gerado` está no `.gitignore`.
 | `401 Token expirado` no frontend | O JWT passou do prazo (`JWT_EXPIRACAO_MINUTOS`) | Entre de novo |
 | `429 Too Many Requests` | Rate limit do nginx | Aguarde um minuto |
 | `postgres` reiniciando com aviso sobre `/var/lib/postgresql/data` | Volume criado por uma versão anterior (PostgreSQL 16) | `docker compose down -v` e suba de novo |
+| `Ports are not available ... 15432` ou `bind: ... forbidden by its access permissions` | Porta ocupada ou reservada pelo Windows (Hyper-V/WSL) | Troque `PORTA_BANCO_LOCAL` no `.env` (ex.: 25432). As faixas reservadas aparecem em `netsh interface ipv4 show excludedportrange protocol=tcp` |
+| DBeaver: `Connection refused` | Perfil `gcp` no `.env` ou contêiner `postgres` parado | Confira `COMPOSE_PROFILES=local` e `docker compose ps` |
+| Postman: `SSL Error: Self signed certificate` | Verificação SSL ligada | **Settings → General → SSL certificate verification: OFF** |

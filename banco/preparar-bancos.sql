@@ -8,6 +8,8 @@
 -- Variáveis do psql (passadas com -v): senha_contas, senha_pagamentos.
 
 \set ON_ERROR_STOP on
+-- Esconde avisos informativos (ex.: "já é membro") quando o script roda de novo.
+SET client_min_messages = warning;
 
 -- Usuários das aplicações: sem privilégios de administrador.
 SELECT 'CREATE ROLE conta_app LOGIN'
@@ -33,5 +35,13 @@ REVOKE ALL ON DATABASE fintech_pagamentos FROM PUBLIC;
 -- CONNECT para abrir conexões; CREATE para o serviço criar o próprio schema.
 GRANT CONNECT, CREATE, TEMPORARY ON DATABASE fintech_contas TO conta_app;
 GRANT CONNECT, CREATE, TEMPORARY ON DATABASE fintech_pagamentos TO pagamento_app;
+
+-- As tabelas pertencem aos usuários das aplicações, que as criam na inicialização.
+-- No Cloud SQL o "postgres" não é superusuário: sem isto, ele recebe "permission denied"
+-- ao consultar conta.contas ou pagamento.transacoes (Cloud SQL Studio, DBeaver, psql).
+-- Aqui o administrador passa a herdar os privilégios dos dois usuários para consultar e
+-- corrigir dados. Os usuários das aplicações continuam sem acesso ao banco um do outro.
+GRANT conta_app TO CURRENT_USER WITH INHERIT TRUE, SET TRUE;
+GRANT pagamento_app TO CURRENT_USER WITH INHERIT TRUE, SET TRUE;
 
 \echo 'Bancos prontos: fintech_contas (conta_app) e fintech_pagamentos (pagamento_app).'
